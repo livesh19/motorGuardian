@@ -1,18 +1,9 @@
 import type { Metadata } from 'next';
-import { GeistSans as Geist } from 'next/font/google'; // Correct import name
-import { GeistMono } from 'next/font/google'; // Correct import name
+import { GeistSans } from 'geist/font/sans'; // Import Geist Sans
+import { GeistMono } from 'geist/font/mono'; // Import Geist Mono
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster'; // Import Toaster
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = GeistMono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
 
 export const metadata: Metadata = {
   title: 'MotoGuardian App', // Updated Title
@@ -25,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark"> {/* Apply dark class globally */}
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground min-h-screen flex flex-col`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} dark`}> {/* Apply font variables and dark class */}
+      <body className={`antialiased bg-background text-foreground min-h-screen flex flex-col`}>
         {children}
         <Toaster /> {/* Add Toaster component */}
       </body>
