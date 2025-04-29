@@ -19,7 +19,7 @@ import {
   MapCameraProps,
 } from '@vis.gl/react-google-maps';
 import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react'; // Import Loader icon
+import { Loader2 } from 'lucide-react';
 
 // Mock coordinates for landmarks
 const landmarkCoords: { [key: string]: google.maps.LatLngLiteral } = {
@@ -84,24 +84,26 @@ const DirectionsRendererComponent: React.FC<{ directionsResult: google.maps.Dire
         if (directionsResult) {
             console.log("Setting directions on renderer:", directionsResult);
             directionsRendererRef.current.setDirections(directionsResult);
+             // Fit bounds when new directions are set
+            if (directionsResult.routes[0]?.bounds) {
+                map.fitBounds(directionsResult.routes[0].bounds, 80); // Add padding
+            }
         } else {
             // Clear directions if result is null
             console.log("Clearing directions from renderer");
             if (directionsRendererRef.current) {
                  directionsRendererRef.current.setDirections({ routes: [] });
-                 // Optionally reset map view here if needed when clearing route
-                 // map.setCenter(defaultCenter);
-                 // map.setZoom(defaultZoom);
             }
         }
 
-         // Cleanup function: Remove directions from map when component unmounts or dependencies change significantly
-        // return () => {
-        //     if (directionsRendererRef.current) {
-        //          console.log("Cleaning up DirectionsRenderer");
-        //          directionsRendererRef.current.setMap(null); // Detach from map
-        //     }
-        // };
+         // Cleanup: Remove directions from map when component unmounts or map changes
+         return () => {
+             if (directionsRendererRef.current) {
+                  console.log("Cleaning up DirectionsRenderer");
+                  directionsRendererRef.current.setMap(null); // Detach from map
+                  directionsRendererRef.current = null; // Clean ref
+             }
+         };
     }, [map, directionsResult]); // Re-run when map instance or directionsResult changes
 
     return null; // This component manages the renderer but doesn't render direct DOM elements
@@ -155,7 +157,14 @@ const HeatmapLayerComponent: React.FC<{ data: google.maps.LatLngLiteral[] }> = (
             }
         }
 
-        // No cleanup function needed here as the layer persists with the map instance managed by APIProvider
+        // Cleanup: Remove heatmap when component unmounts or map changes
+        return () => {
+            if (heatmapRef.current) {
+                 console.log("Cleaning up HeatmapLayer");
+                 heatmapRef.current.setMap(null);
+                 heatmapRef.current = null;
+            }
+        };
 
     }, [map, data]); // Re-run when map instance or data changes
 
@@ -225,11 +234,12 @@ const NavigationPage: React.FC = () => {
                     setMapCenter(newCoords); // Re-center map
                     setMapZoom(15); // Zoom in closer on user location
                     toast({ title: "Location Refreshed", description: "Using current location.", duration: 3000 });
-                    // Clear previous route if location changes significantly (optional)
-                     // setDirectionsResult(null);
-                     // setIsRouteCalculated(false);
-                     // setTotalDistance('');
-                     // setTotalDuration('');
+                    // Clear previous route if location changes
+                     setDirectionsResult(null);
+                     setIsRouteCalculated(false);
+                     setTotalDistance('');
+                     setTotalDuration('');
+                     setSelectedDestinationCoords(null); // Clear destination marker too
                  } else {
                      console.error("Geolocation coordinates out of bounds:", newCoords);
                      toast({ title: "Location Error", description: "Received invalid coordinates. Using default.", variant: "destructive" });
@@ -320,21 +330,7 @@ const NavigationPage: React.FC = () => {
             setTotalDistance(route.distance?.text || 'N/A');
             setTotalDuration(route.duration?.text || 'N/A');
 
-             // Fit map bounds to the route - Let DirectionsRendererComponent handle this
-             // The DirectionsRenderer usually adjusts the viewport automatically.
-             // If manual control is needed:
-            if (mapRef.current && response.routes[0].bounds) {
-                 console.log("Fitting map to bounds:", response.routes[0].bounds);
-                 mapRef.current.fitBounds(response.routes[0].bounds, 80); // Add padding
-            } else {
-                  console.log("Map ref or route bounds not available for fitting.");
-                  // Optional: Fallback centering if fitBounds fails
-                  const midLat = (sourceCoords.lat + destCoords.lat) / 2;
-                  const midLng = (sourceCoords.lng + destCoords.lng) / 2;
-                  setMapCenter({ lat: midLat, lng: midLng });
-                  // Calculate appropriate zoom level based on distance (more complex)
-                  setMapZoom(12); // Example fallback zoom
-            }
+             // DirectionsRendererComponent will now handle fitting bounds
         } else {
             console.error("Directions request failed due to " + response.status);
             toast({ title: "Route Error", description: `Could not find a route: ${response.status}`, variant: "destructive" });
@@ -402,9 +398,8 @@ const NavigationPage: React.FC = () => {
 
      // Camera handling
      const handleCameraChange = useCallback((ev: MapCameraChangedEvent) => {
-         // Update state if needed, but be cautious of feedback loops with fitBounds
-         // setMapCenter(ev.detail.center);
-         // setMapZoom(ev.detail.zoom);
+         setMapCenter(ev.detail.center);
+         setMapZoom(ev.detail.zoom);
          // console.log("Camera changed:", ev.detail.center, ev.detail.zoom);
      }, []);
 
@@ -412,11 +407,6 @@ const NavigationPage: React.FC = () => {
      const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
          console.log("Map instance loaded and assigned to ref:", mapInstance);
          mapRef.current = mapInstance;
-         // You could potentially re-trigger route calculation or fitting here
-         // if directionsResult exists but wasn't rendered properly before map load.
-         // if (directionsResult && mapRef.current && directionsResult.routes[0]?.bounds) {
-         //    mapRef.current.fitBounds(directionsResult.routes[0].bounds);
-         // }
      }, []);
 
 
@@ -430,7 +420,7 @@ const NavigationPage: React.FC = () => {
 
 
    return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-gradient-to-br from-background to-muted/30">
+     <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-gradient-to-br from-background to-muted/30">
 
        {/* Map container */}
         <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border border-border relative">
@@ -446,18 +436,19 @@ const NavigationPage: React.FC = () => {
           {isClient ? (
             <APIProvider apiKey={apiKey} libraries={['visualization', 'marker', 'routes']}> {/* Add 'routes' library */}
                <Map
-                 ref={mapRef} // Assign ref here - Important: APIProvider must wrap Map for useMap hook to work in children
+                 ref={mapRef} // Assign ref here
                  mapId={mapId}
                  center={mapCenter} // Controlled center
                  zoom={mapZoom} // Controlled zoom
-                 gestureHandling={'greedy'}
-                 disableDefaultUI={true}
+                 gestureHandling={'greedy'} // Enable interaction
+                 zoomControl={true} // Show zoom controls
+                 disableDefaultUI={false} // Keep default UI elements like zoom
                  className="w-full h-full"
                  mapTypeId="roadmap"
                  onCameraChanged={handleCameraChange}
-                 // onLoad={onMapLoad} // `ref` prop is preferred with APIProvider
                  options={{ // Pass initial options if needed
-                    // Example: mapTypeControl: false, streetViewControl: false
+                    mapTypeControl: false, // Example: hide map type control
+                    streetViewControl: false // Example: hide street view pegman
                  }}
                >
                  {/* Source Marker - Check if sourceCoords is valid */}
@@ -536,18 +527,17 @@ const NavigationPage: React.FC = () => {
            </motion.div>
          )}
 
-         {/* Proceed Buttons (conditionally rendered) */}
-         {isRouteCalculated && (
-           <div className="flex flex-col sm:flex-row gap-2 mt-4 border-t border-border pt-4">
-             <Button onClick={() => router.push('/dashboard-non-obd')} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
-               Proceed to Non-OBD Dashboard
-             </Button>
-             <Button onClick={() => router.push('/dashboard-obd')} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white">
-               Proceed to OBD Dashboard
-             </Button>
-           </div>
-         )}
-
+          {/* Proceed Buttons (conditionally rendered) */}
+          {isRouteCalculated && (
+            <div className="flex flex-col sm:flex-row gap-2 mt-4 border-t border-border pt-4 items-center justify-center">
+                <Button onClick={() => router.push('/dashboard-non-obd')} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                Proceed to Non-OBD Dashboard
+                </Button>
+                <Button onClick={() => router.push('/dashboard-obd')} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white">
+                Proceed to OBD Dashboard
+                </Button>
+            </div>
+          )}
        </motion.div>
      </div>
     );
