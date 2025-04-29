@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useToast } from '@/hooks/use-toast';
-import { MapContainer, TileLayer, Marker, Polyline, useMap, Circle, Popup, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap, Circle, Popup, Tooltip as LeafletTooltip } from 'react-leaflet'; // Renamed Tooltip to LeafletTooltip
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet'; // Leaflet is safe to import here due to 'use client'
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -21,7 +21,14 @@ import accidentsData from '@/data/chennai-accidents.json';
 import { cn } from '@/lib/utils';
 
 // Correctly import the custom marker icon
-import markerIconPng from "leaflet/dist/images/marker-icon.png";
+// Ensure the path is correct relative to the public folder or use a data URL
+// If using the default icon, you might need this fix:
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png').default,
+  iconUrl: require('leaflet/dist/images/marker-icon.png').default,
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png').default,
+});
 
 
 // Define the segment risk data type
@@ -30,19 +37,6 @@ interface SegmentRiskData {
   riskScore: number;
   accidentCount: number;
 }
-
-// Now you can use L.icon as intended
-const customMarkerIcon = L.icon({
-  iconUrl: markerIconPng.src,
-  // iconRetinaUrl: markerIconPng.src, // Retina URL might be same or different depending on asset
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-  iconSize: [25, 41],     // size of the icon
-  iconAnchor: [12, 41],    // point of the icon which will correspond to marker's location
-  popupAnchor: [1, -34],   // point from which the popup should open relative to the iconAnchor
-  shadowSize: [41, 41]     // size of the shadow
-});
-
-
 
 // Mock data for Chennai landmarks, replace with API later
 const chennaiLandmarks = ["T. Nagar", "Anna Salai", "Adyar", "Nungambakkam", "Mylapore", "Besant Nagar"];
@@ -197,7 +191,10 @@ const popupVariants: Variants = {
   exit: { opacity: 0, y: 20, transition: { duration: 0.2 } },
 };
 
-const NavigationPage: React.FC = () => {
+// Define props for the component if any (currently none needed)
+interface NavigationPageProps {}
+
+const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => { // Wrap with React.memo
   const router = useRouter();
   const { toast } = useToast();
   const [sourceCoords, setSourceCoords] = useState<[number, number] | null>(null);
@@ -213,6 +210,7 @@ const NavigationPage: React.FC = () => {
   const [totalRisk, setTotalRisk] = useState<number>(0); // State for total risk
   const [segmentRisks, setSegmentRisks] = useState<SegmentRiskData[]>([]); // State for total risk
    const [selectedDestinationCoords, setSelectedDestinationCoords] = useState<[number, number] | null>(null);
+   const mapContainerRef = useRef<HTMLDivElement>(null); // Ref for the map container div
 
     // Mock coordinates for landmarks
     const landmarkCoords: { [key: string]: [number, number] } = {
@@ -293,7 +291,7 @@ const NavigationPage: React.FC = () => {
               setSegmentRisks(calculatedRoute.segmentRisks);
               setIsRouteCalculated(true);
 
-              // Center map view on the route
+              // Center map view on the route - Check if mapRef.current exists
               if (mapRef.current && calculatedRoute.route.length > 0) {
                   const bounds = L.latLngBounds(calculatedRoute.route);
                    try {
@@ -327,11 +325,10 @@ const NavigationPage: React.FC = () => {
 
    // Trigger calculation when destination or beta changes
    useEffect(() => {
-      if (isRouteCalculated) { // Recalculate if already calculated and beta changes
-          handleCalculateRoute();
-       }
+      // No automatic recalculation on beta change unless explicitly triggered
+      // This prevents recalculating when the user is just adjusting the preference
    // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [beta, destination, sourceCoords, isRouteCalculated, handleCalculateRoute]); // Added handleCalculateRoute as dependency
+   }, [destination, sourceCoords]); // Removed beta and isRouteCalculated from deps
 
 
    // Function to handle "Find Route" button click
@@ -344,6 +341,23 @@ const NavigationPage: React.FC = () => {
     };
 
   const chennaiCenter: [number, number] = [13.05, 80.25]; // Slightly adjusted center
+
+  // Cleanup function for map instance
+    useEffect(() => {
+        // Ensure map instance is properly cleaned up when component unmounts
+        return () => {
+            if (mapRef.current) {
+                // Check if mapRef.current is not null before trying to remove
+                try {
+                    mapRef.current.remove();
+                } catch (e) {
+                    console.error("Error removing map:", e);
+                } finally {
+                    mapRef.current = null; // Set ref to null after removal
+                }
+            }
+        };
+    }, []); // Empty dependency array ensures this runs only on unmount
 
 
   return (
@@ -368,58 +382,65 @@ const NavigationPage: React.FC = () => {
         )}
       </AnimatePresence>
       {/* Map container */}
-       <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border">
-        <MapContainer center={sourceCoords || chennaiCenter} zoom={13} style={{ height: '100%', width: '100%' }} ref={mapRef} >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
+       <div ref={mapContainerRef} className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border">
+         {typeof window !== 'undefined' && ( // Render MapContainer only on client
+            <MapContainer
+                center={sourceCoords || chennaiCenter}
+                zoom={13}
+                style={{ height: '100%', width: '100%' }}
+                whenCreated={mapInstance => { mapRef.current = mapInstance; }} // Use whenCreated to set the ref
+             >
+                <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                 />
 
-          {/* Source Marker */}
-          {sourceCoords && (
-             <Marker position={sourceCoords} icon={customMarkerIcon}>
-                <Popup>Your current location</Popup>
-             </Marker>
-          )}
+                 {/* Source Marker */}
+                 {sourceCoords && (
+                    <Marker position={sourceCoords}>
+                        <Popup>Your current location</Popup>
+                    </Marker>
+                 )}
 
-          {/* Destination Marker */}
-           {selectedDestinationCoords && (
-             <Marker position={selectedDestinationCoords} icon={customMarkerIcon}>
-               <Popup>{destination}</Popup>
-             </Marker>
-           )}
+                 {/* Destination Marker */}
+                 {selectedDestinationCoords && (
+                    <Marker position={selectedDestinationCoords}>
+                        <Popup>{destination}</Popup>
+                    </Marker>
+                 )}
 
-          {/* Display the route as colored segments */}
-          {route.length > 1 && route.map((_, idx) => {
-             if (idx === route.length - 1) return null; // No segment starts from the last point
-             const startPoint = route[idx];
-             const endPoint = route[idx + 1];
-             const segmentInfo = segmentRisks[idx]; // Get risk info for this segment
+                 {/* Display the route as colored segments */}
+                 {route.length > 1 && route.map((_, idx) => {
+                    if (idx === route.length - 1) return null; // No segment starts from the last point
+                    const startPoint = route[idx];
+                    const endPoint = route[idx + 1];
+                    const segmentInfo = segmentRisks[idx]; // Get risk info for this segment
 
-             if (!segmentInfo) return null; // Skip if no risk info
+                    if (!segmentInfo) return null; // Skip if no risk info
 
-             let color = 'blue'; // Default for unknown/direct
-             if (segmentInfo.riskScore >= 4) {
-               color = 'red'; // High risk
-             } else if (segmentInfo.riskScore >= 2) {
-               color = 'orange'; // Medium risk
-             } else {
-               color = 'green'; // Low risk
-             }
+                    let color = 'blue'; // Default for unknown/direct
+                    if (segmentInfo.riskScore >= 4) {
+                        color = 'red'; // High risk
+                    } else if (segmentInfo.riskScore >= 2) {
+                        color = 'orange'; // Medium risk
+                    } else {
+                        color = 'green'; // Low risk
+                    }
 
-             return (
-               <Polyline key={`segment-${idx}`} positions={[startPoint, endPoint]} color={color} weight={5} opacity={0.8}>
-                 <Tooltip sticky>
-                    <div>
-                        <strong>{segmentInfo.roadName || `Segment ${idx + 1}`}</strong><br/>
-                        Risk Score: {segmentInfo.riskScore.toFixed(1)}<br/>
-                     </div>
-                 </Tooltip>
-               </Polyline>
-             );
-           })}
+                    return (
+                        <Polyline key={`segment-${idx}`} positions={[startPoint, endPoint]} color={color} weight={5} opacity={0.8}>
+                            <LeafletTooltip sticky>
+                                <div>
+                                    <strong>{segmentInfo.roadName || `Segment ${idx + 1}`}</strong><br/>
+                                    Risk Score: {segmentInfo.riskScore.toFixed(1)}<br/>
+                                </div>
+                            </LeafletTooltip>
+                        </Polyline>
+                    );
+                 })}
 
-        </MapContainer>
+            </MapContainer>
+         )}
       </div>
 
       {/* Input & Control Panel */}
@@ -430,6 +451,9 @@ const NavigationPage: React.FC = () => {
           value={destination}
           onChange={(e) => {
               setDestination(e.target.value);
+               setIsRouteCalculated(false); // Clear route when destination changes
+               setRoute([]);
+               setShowWarningPopup(false);
           }}
           list="landmarks"
           className="bg-input border-border focus:ring-primary"
@@ -468,12 +492,12 @@ const NavigationPage: React.FC = () => {
 
          {/* Proceed Button (conditionally rendered) */}
         {isRouteCalculated && (
-           <Button onClick={() => router.push('/dashboard-non-obd')} className="w-full bg-green-600 hover:bg-green-700 text-white">
+           <Button onClick={() => router.push('/non-obd-dashboard')} className="w-full bg-green-600 hover:bg-green-700 text-white">
              Proceed to Non-OBD Dashboard
           </Button>
         )}
         {isRouteCalculated && (
-             <Button onClick={() => router.push('/dashboard-obd')} className="w-full bg-teal-600 hover:bg-teal-700 text-white mt-2">
+             <Button onClick={() => router.push('/obd-dashboard')} className="w-full bg-teal-600 hover:bg-teal-700 text-white mt-2">
               Proceed to OBD Dashboard
            </Button>
          )}
@@ -505,6 +529,8 @@ const NavigationPage: React.FC = () => {
       </div>
     </div>
   );
-};
+}); // Close React.memo
+
+NavigationPage.displayName = 'NavigationPage'; // Add display name for React DevTools
 
 export default NavigationPage;
