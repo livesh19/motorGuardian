@@ -7,11 +7,10 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useToast } from '@/hooks/use-toast';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet'; // Leaflet is safe to import here due to 'use client'
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip as LeafletTooltip, Popup, Circle } from 'react-leaflet'; // Import react-leaflet components
+import L, { Map as LeafletMap } from 'leaflet'; // Leaflet is safe to import here due to 'use client'
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip as LeafletTooltip, Popup } from 'react-leaflet'; // Import react-leaflet components
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-
 
 // Import mock accident data
 import accidentsData from '@/data/chennai-accidents.json';
@@ -28,7 +27,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 // @ts-ignore Remove _getIconUrl potentially problematic function
 delete L.Icon.Default.prototype._getIconUrl;
 
-L.Icon.Default.mergeOptions({
+const defaultIcon = L.icon({
   iconRetinaUrl: markerIcon2x.src,
   iconUrl: markerIcon.src,
   shadowUrl: markerShadow.src,
@@ -37,6 +36,8 @@ L.Icon.Default.mergeOptions({
   popupAnchor: [1, -34],
   shadowSize: [41, 41]
 });
+
+L.Marker.prototype.options.icon = defaultIcon;
 
 
 // Define the segment risk data type
@@ -47,7 +48,7 @@ interface SegmentRiskData {
 }
 
 // Mock data for Chennai landmarks, replace with API later
-const chennaiLandmarks = ["T. Nagar", "Anna Salai", "Adyar", "Nungambakkam", "Mylapore", "Besant Nagar"];
+const chennaiLandmarks = ["T. Nagar", "Anna Salai", "Adyar", "Nungambakkam", "Mylapore", "Besant Nagar", "Central Station Area", "Marina Beach Area"];
 
 
 // Define AccidentData interface
@@ -204,49 +205,61 @@ interface NavigationPageProps {}
 
 
 // Map component to handle Leaflet initialization and updates using react-leaflet
-const LeafletMapComponent = React.memo(({ sourceCoords, destinationCoords, route, segmentRisks, center }: { sourceCoords: [number, number] | null, destinationCoords: [number, number] | null, route: [number, number][], segmentRisks: SegmentRiskData[], center: [number, number] }) => {
-   const mapRef = useRef<L.Map | null>(null);
-   const [mapKey, setMapKey] = useState(0); // Key to force remount if needed
+const LeafletMapComponent = ({ sourceCoords, destinationCoords, route, segmentRisks, center }: { sourceCoords: [number, number] | null, destinationCoords: [number, number] | null, route: [number, number][], segmentRisks: SegmentRiskData[], center: [number, number] }) => {
+   const mapRef = useRef<LeafletMap | null>(null);
+   const [mapKey, setMapKey] = useState(Date.now()); // Key to force remount if needed
 
+   useEffect(() => {
+     // Function to resize map
+     const resizeMap = () => {
+       if (mapRef.current) {
+         mapRef.current.invalidateSize();
+       }
+     };
 
-  useEffect(() => {
-      // This effect ensures the map size is invalidated when container might resize
-      const map = mapRef.current;
-      if (map) {
-         // Short delay to allow container rendering
-         const timer = setTimeout(() => map.invalidateSize(), 100);
-         return () => clearTimeout(timer);
-      }
-  }, [mapRef]);
+     // Invalidate size initially and on window resize
+     const timer = setTimeout(resizeMap, 100);
+     window.addEventListener('resize', resizeMap);
+
+     // Cleanup
+     return () => {
+       clearTimeout(timer);
+       window.removeEventListener('resize', resizeMap);
+     };
+   }, []); // Runs once after initial render
+
 
    useEffect(() => {
     // Fit bounds when route changes
     if (mapRef.current && route.length > 1) {
       const bounds = L.latLngBounds(route);
       if (bounds.isValid()) {
-         mapRef.current.flyToBounds(bounds, { padding: [50, 50] });
+         mapRef.current.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       }
     } else if (mapRef.current && sourceCoords) {
       // If no route, fly to source coords
       mapRef.current.flyTo(sourceCoords, 13);
+    } else if (mapRef.current) {
+        // Fallback to center if no source or route
+        mapRef.current.flyTo(center, 13);
     }
-   }, [route, sourceCoords]);
+   }, [route, sourceCoords, center]); // Rerun when route, source, or center changes
 
 
    // If map container ref isn't available yet, don't render map
    // The parent div provides the space
     if (typeof window === 'undefined') {
-        return null; // Don't render on server
+        return <div className="w-full h-full flex items-center justify-center bg-muted"><p className="text-muted-foreground">Initializing Map...</p></div>; // Placeholder for SSR
     }
 
   return (
         <MapContainer
-            key={mapKey} // Use key to potentially force re-render if needed
+            key={mapKey} // Use key to force re-render ONLY IF ABSOLUTELY NEEDED. Avoid if possible.
             center={sourceCoords || center}
             zoom={13}
             style={{ height: '100%', width: '100%' }}
-            whenCreated={(mapInstance) => { mapRef.current = mapInstance; }} // Use whenCreated to get map instance
-            // Removed ref={mapRef} as we use whenCreated
+            whenCreated={(mapInstance) => { mapRef.current = mapInstance; }} // Use whenCreated
+            className="z-0" // Ensure map container has a base z-index if needed
          >
             <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -255,15 +268,15 @@ const LeafletMapComponent = React.memo(({ sourceCoords, destinationCoords, route
 
              {/* Source Marker */}
              {sourceCoords && (
-                <Marker position={sourceCoords}>
+                <Marker position={sourceCoords} icon={defaultIcon}>
                     <Popup>Your current location</Popup>
                 </Marker>
              )}
 
              {/* Destination Marker */}
              {destinationCoords && (
-                 <Marker position={destinationCoords}>
-                     <Popup>Destination</Popup>
+                 <Marker position={destinationCoords} icon={defaultIcon}>
+                     <Popup>Destination: {destinationCoords.join(', ')}</Popup>
                  </Marker>
              )}
 
@@ -274,12 +287,25 @@ const LeafletMapComponent = React.memo(({ sourceCoords, destinationCoords, route
                   const endPoint = route[idx + 1];
                   const segmentInfo = segmentRisks[idx];
 
-                  if (!segmentInfo) return null;
+                  // Basic check for valid points
+                  if (!startPoint || !endPoint || !Array.isArray(startPoint) || !Array.isArray(endPoint) || startPoint.length !== 2 || endPoint.length !== 2) {
+                     console.warn("Skipping invalid route segment at index:", idx);
+                     return null;
+                  }
 
                   let color = 'blue';
-                  if (segmentInfo.riskScore >= 4) color = 'red';
-                  else if (segmentInfo.riskScore >= 2) color = 'orange';
-                  else color = 'green';
+                  let riskLabel = "Low Risk";
+                  if (segmentInfo && segmentInfo.riskScore >= 4) {
+                    color = 'red';
+                    riskLabel = "High Risk";
+                  }
+                  else if (segmentInfo && segmentInfo.riskScore >= 2) {
+                    color = 'orange';
+                     riskLabel = "Moderate Risk";
+                  } else if (segmentInfo) {
+                      color = 'green';
+                  }
+
 
                   return (
                       <Polyline
@@ -288,22 +314,21 @@ const LeafletMapComponent = React.memo(({ sourceCoords, destinationCoords, route
                           pathOptions={{ color: color, weight: 5, opacity: 0.8 }}
                        >
                           <LeafletTooltip sticky>
-                            <strong>{segmentInfo.roadName || `Segment ${idx + 1}`}</strong><br/>Risk Score: {segmentInfo.riskScore.toFixed(1)}
+                            <strong>{segmentInfo?.roadName || `Segment ${idx + 1}`}</strong><br/>Risk Score: {segmentInfo?.riskScore?.toFixed(1) ?? 'N/A'} ({riskLabel})
                           </LeafletTooltip>
                       </Polyline>
                   );
               })}
         </MapContainer>
   );
-});
-LeafletMapComponent.displayName = 'LeafletMapComponent';
+};
 
 
-const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
+const NavigationPage: React.FC<NavigationPageProps> = () => {
   const router = useRouter();
   const { toast } = useToast();
   const [sourceCoords, setSourceCoords] = useState<[number, number] | null>(null);
-  const defaultLocation: [number, number] = [13.0479, 80.2139]; // Nungambakkam
+  const defaultLocation: [number, number] = [13.0604, 80.2478]; // Default Nungambakkam
   const chennaiCenter: [number, number] = [13.05, 80.25];
   const [destination, setDestination] = useState<string>('');
   const [isRouteCalculated, setIsRouteCalculated] = useState<boolean>(false);
@@ -392,7 +417,7 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
                const hasHighRiskSegments = calculatedRoute.segmentRisks.some((seg) => seg.riskScore > 3);
                setShowWarningPopup(hasHighRiskSegments);
            } else {
-                toast({ title: "Error", description: "Destination not found.", variant: "destructive" });
+                toast({ title: "Error", description: "Destination landmark not recognized.", variant: "destructive" });
                 setIsRouteCalculated(false);
                 setRoute([]);
                 setShowWarningPopup(false);
@@ -401,6 +426,7 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
        } else if (!sourceCoords) {
            toast({ title: "Error", description: "Source location not available.", variant: "destructive" });
        } else {
+           // Clear route if destination is empty
            setIsRouteCalculated(false);
            setRoute([]);
            setShowWarningPopup(false);
@@ -409,10 +435,9 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
    }, [destination, sourceCoords, beta, toast, isClient]);
 
 
-    // Trigger calculation when destination or beta changes
+    // Trigger calculation when beta changes, only if a route exists and destination is valid
     useEffect(() => {
-        // Automatic recalculation when beta changes, only if a route exists
-        if (isRouteCalculated) {
+        if (isRouteCalculated && landmarkCoords[destination]) {
            handleCalculateRoute();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -420,12 +445,18 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
 
      useEffect(() => {
         // Clear route if destination or source changes *after* initial load
-        if (isClient) { // Only run after mount
-             setIsRouteCalculated(false);
-             setRoute([]);
-             setShowWarningPopup(false);
-             setSelectedDestinationCoords(landmarkCoords[destination] || null); // Update coords if destination valid
-        }
+        // Only clear if the change makes the input invalid
+         if (isClient) {
+             const currentDestCoords = landmarkCoords[destination];
+             setSelectedDestinationCoords(currentDestCoords || null); // Keep dest coords updated
+
+             if (!sourceCoords || !currentDestCoords) {
+                // If source disappears or destination becomes invalid, clear route
+                 setIsRouteCalculated(false);
+                 setRoute([]);
+                 setShowWarningPopup(false);
+             }
+         }
      }, [destination, sourceCoords, isClient]);
 
 
@@ -435,12 +466,16 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
              toast({ title: "Input Needed", description: "Please enter a destination.", variant: "destructive" });
              return;
          }
+          if (!landmarkCoords[destination]) {
+              toast({ title: "Invalid Destination", description: "Please select a valid landmark from the list.", variant: "destructive" });
+              return;
+          }
          handleCalculateRoute(); // Perform the calculation
      };
 
 
    return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8">
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-gradient-to-br from-background to-muted/30">
          {/* Warning Popup */}
          <AnimatePresence>
          {showWarningPopup && (
@@ -462,7 +497,7 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
          </AnimatePresence>
 
           {/* Map container */}
-         <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border">
+         <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border border-border">
            {isClient ? ( // Render LeafletMapComponent only on the client
                <LeafletMapComponent
                  sourceCoords={sourceCoords}
@@ -480,87 +515,92 @@ const NavigationPage: React.FC<NavigationPageProps> = React.memo(() => {
 
 
          {/* Input & Control Panel */}
-         <div className="flex flex-col gap-4 w-full max-w-md p-4 bg-card border rounded-lg shadow-md">
-         <Input
-            type="text"
-            placeholder="Enter destination landmark"
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)} // No need to clear route here, useEffect handles it
-            list="landmarks"
-            className="bg-input border-border focus:ring-primary"
-         />
-         <datalist id="landmarks">
-            {Object.keys(landmarkCoords).map((landmark, idx) => (
-               <option key={idx} value={landmark} />
-            ))}
-         </datalist>
+         <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex flex-col gap-4 w-full max-w-md p-4 bg-card border border-border rounded-lg shadow-md"
+         >
+             <Input
+                type="text"
+                placeholder="Enter destination landmark"
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+                list="landmarks"
+                className="bg-input border-border focus:ring-primary"
+             />
+             <datalist id="landmarks">
+                {Object.keys(landmarkCoords).map((landmark, idx) => (
+                   <option key={idx} value={landmark} />
+                ))}
+             </datalist>
 
-         {/* Route Preference Radio Group */}
-         <div className='w-full flex flex-col sm:flex-row gap-3 items-center justify-between'>
-            <Label className="text-sm font-medium text-muted-foreground">Route Preference:</Label>
-            <RadioGroup value={beta.toString()} onValueChange={value => setBeta(Number(value))} className="flex gap-4">
-               <div className='flex items-center gap-2'>
-                  <RadioGroupItem value="0" id="r1" />
-                  <Label htmlFor="r1" className="text-xs">Fastest</Label>
-               </div>
-               <div className='flex items-center gap-2'>
-                  <RadioGroupItem value="2" id="r2" />
-                  <Label htmlFor="r2" className="text-xs">Balanced</Label>
-               </div>
-               <div className='flex items-center gap-2'>
-                  <RadioGroupItem value="5" id="r3" />
-                  <Label htmlFor="r3" className="text-xs">Safest</Label>
-               </div>
-            </RadioGroup>
-         </div>
-
-
-         {/* Action Buttons */}
-         <div className='flex flex-col sm:flex-row gap-3'>
-            <Button onClick={handleFindRouteClick} className="flex-1 bg-primary hover:bg-accent" disabled={!isClient || !sourceCoords}>Find Route</Button>
-            <Button variant="outline" onClick={handleManualLocation} className="flex-1" disabled={!isClient}>Use Current Location</Button>
-         </div>
-
-         {/* Proceed Button (conditionally rendered) */}
-         {isRouteCalculated && (
-            <Button onClick={() => router.push('/non-obd-dashboard')} className="w-full bg-green-600 hover:bg-green-700 text-white">
-               Proceed to Non-OBD Dashboard
-            </Button>
-         )}
-         {isRouteCalculated && (
-               <Button onClick={() => router.push('/obd-dashboard')} className="w-full bg-teal-600 hover:bg-teal-700 text-white mt-2">
-               Proceed to OBD Dashboard
-            </Button>
-         )}
+             {/* Route Preference Radio Group */}
+             <div className='w-full flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between'>
+                <Label className="text-sm font-medium text-muted-foreground pt-1 sm:pt-0">Route Preference:</Label>
+                <RadioGroup value={beta.toString()} onValueChange={value => setBeta(Number(value))} className="flex gap-4">
+                   <div className='flex items-center gap-2'>
+                      <RadioGroupItem value="0" id="r1" />
+                      <Label htmlFor="r1" className="text-xs">Fastest</Label>
+                   </div>
+                   <div className='flex items-center gap-2'>
+                      <RadioGroupItem value="2" id="r2" />
+                      <Label htmlFor="r2" className="text-xs">Balanced</Label>
+                   </div>
+                   <div className='flex items-center gap-2'>
+                      <RadioGroupItem value="5" id="r3" />
+                      <Label htmlFor="r3" className="text-xs">Safest</Label>
+                   </div>
+                </RadioGroup>
+             </div>
 
 
-         {/* Route Information Panel */}
-         {isRouteCalculated && (
-            <motion.div
-               initial={{ opacity: 0, height: 0 }}
-               animate={{ opacity: 1, height: 'auto' }}
-               transition={{ duration: 0.3 }}
-               className="mt-4 p-3 border rounded-md bg-background/50 text-xs"
-            >
-               <h3 className="font-semibold mb-1 text-sm text-foreground">Route Summary</h3>
-               <p>Distance: <span className="font-medium text-primary">{totalDistance.toFixed(1)} km</span></p>
-               <p>Est. Time: <span className="font-medium text-primary">{(totalDistance * 3).toFixed(0)} min</span></p> {/* Improved mock time */}
-               <p>Avg. Risk Score: <span className="font-medium text-primary">{(totalRisk / (segmentRisks.length || 1)).toFixed(1)}</span></p>
-               {/* Optionally list risky segments */}
-               {segmentRisks.filter(s => s.riskScore >= 4).length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-dashed">
-                     <p className="text-destructive font-medium text-xs">High-Risk Segments:</p>
-                     <ul className="list-disc list-inside text-destructive text-xs">
-                        {segmentRisks.filter(s => s.riskScore >= 4).map((s, i) => <li key={i}>{s.roadName}</li>)}
-                     </ul>
-                  </div>
-               )}
-            </motion.div>
-         )}
-         </div>
+             {/* Action Buttons */}
+             <div className='flex flex-col sm:flex-row gap-3'>
+                <Button onClick={handleFindRouteClick} className="flex-1 bg-primary hover:bg-accent" disabled={!isClient || !sourceCoords}>Find Route</Button>
+                <Button variant="outline" onClick={handleManualLocation} className="flex-1" disabled={!isClient}>Use Current Location</Button>
+             </div>
+
+             {/* Proceed Buttons (conditionally rendered) */}
+             {isRouteCalculated && (
+                 <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    <Button onClick={() => router.push('/non-obd-dashboard')} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                    Proceed to Non-OBD Dashboard
+                    </Button>
+                    <Button onClick={() => router.push('/obd-dashboard')} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white">
+                    Proceed to OBD Dashboard
+                    </Button>
+                 </div>
+             )}
+
+
+             {/* Route Information Panel */}
+             {isRouteCalculated && (
+                <motion.div
+                   initial={{ opacity: 0, height: 0 }}
+                   animate={{ opacity: 1, height: 'auto' }}
+                   transition={{ duration: 0.3 }}
+                   className="mt-4 p-3 border border-border rounded-md bg-background/50 text-xs"
+                >
+                   <h3 className="font-semibold mb-1 text-sm text-foreground">Route Summary</h3>
+                   <p>Distance: <span className="font-medium text-primary">{totalDistance.toFixed(1)} km</span></p>
+                   <p>Est. Time: <span className="font-medium text-primary">{(totalDistance * 3).toFixed(0)} min</span></p> {/* Improved mock time */}
+                   <p>Avg. Risk Score: <span className="font-medium text-primary">{(totalRisk / (segmentRisks.length || 1)).toFixed(1)}</span></p>
+                   {/* Optionally list risky segments */}
+                   {segmentRisks.filter(s => s.riskScore >= 4).length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-dashed border-border/50">
+                         <p className="text-destructive font-medium text-xs">High-Risk Segments:</p>
+                         <ul className="list-disc list-inside text-destructive text-xs">
+                            {segmentRisks.filter(s => s.riskScore >= 4).map((s, i) => <li key={i}>{s.roadName}</li>)}
+                         </ul>
+                      </div>
+                   )}
+                </motion.div>
+             )}
+         </motion.div>
       </div>
    );
-});
+};
 
 NavigationPage.displayName = 'NavigationPage';
 
