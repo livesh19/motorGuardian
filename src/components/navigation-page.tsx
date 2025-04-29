@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence, Variants } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -72,7 +72,7 @@ const DirectionsRendererComponent: React.FC<{ directionsResult: google.maps.Dire
         if (!directionsRendererRef.current) {
             console.log("Initializing DirectionsRenderer");
             directionsRendererRef.current = new google.maps.DirectionsRenderer({
-                 suppressMarkers: true, // Use AdvancedMarker for start/end points
+                 suppressMarkers: true, // We use AdvancedMarker for start/end points
                  polylineOptions: {
                     strokeColor: 'hsl(var(--primary))', // Use theme color for route
                     strokeWeight: 6,
@@ -313,14 +313,14 @@ const NavigationPage: React.FC = () => {
                 console.log("Fitting map to bounds:", response.routes[0].bounds);
                 mapRef.current.fitBounds(response.routes[0].bounds);
                  // Adjust zoom slightly after fitBounds if needed
-                // setTimeout(() => {
-                //   if (mapRef.current) {
-                //     const currentZoom = mapRef.current.getZoom();
-                //     if (currentZoom && currentZoom > 15) { // Don't zoom in too much
-                //       mapRef.current.setZoom(15);
-                //     }
-                //   }
-                // }, 100);
+                 // setTimeout(() => {
+                 //   if (mapRef.current) {
+                 //     const currentZoom = mapRef.current.getZoom();
+                 //     if (currentZoom && currentZoom > 15) { // Don't zoom in too much
+                 //       mapRef.current.setZoom(15);
+                 //     }
+                 //   }
+                 // }, 100);
             } else {
                  console.log("Map ref or route bounds not available for fitting.");
                  // Manually center if bounds fitting fails
@@ -410,7 +410,7 @@ const NavigationPage: React.FC = () => {
        {/* Map container */}
         <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border border-border">
           {isClient ? (
-            <APIProvider apiKey={apiKey} libraries={['visualization']}> {/* Load visualization library */}
+            <APIProvider apiKey={apiKey} libraries={['visualization', 'marker']}> {/* Load visualization library */}
                <Map
                  mapId={mapId}
                  center={mapCenter} // Controlled center
@@ -518,4 +518,3 @@ const NavigationPage: React.FC = () => {
 NavigationPage.displayName = 'NavigationPage';
 
 export default NavigationPage;
-
