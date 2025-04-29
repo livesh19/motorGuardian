@@ -6,38 +6,21 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useToast } from '@/hooks/use-toast';
-import 'leaflet/dist/leaflet.css';
-import L, { Map as LeafletMap, LatLngBoundsLiteral } from 'leaflet'; // Leaflet is safe to import here due to 'use client'
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip as LeafletTooltip, Popup, useMap } from 'react-leaflet'; // Import react-leaflet components
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import {
+  APIProvider,
+  Map,
+  AdvancedMarker,
+  Pin,
+  InfoWindow,
+} from '@vis.gl/react-google-maps';
 
 // Import mock accident data
 import accidentsData from '@/data/chennai-accidents.json';
 
 // Import utils (only cn is used now)
 import { cn } from '@/lib/utils';
-
-// Fix Leaflet's default icon path issue with bundlers
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-// Explicitly configure Leaflet's default icon paths
-// @ts-ignore Remove _getIconUrl potentially problematic function
-delete L.Icon.Default.prototype._getIconUrl;
-
-const defaultIcon = L.icon({
-  iconRetinaUrl: markerIcon2x.src,
-  iconUrl: markerIcon.src,
-  shadowUrl: markerShadow.src,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-L.Marker.prototype.options.icon = defaultIcon;
 
 
 // Define the segment risk data type
@@ -203,111 +186,6 @@ const popupVariants: Variants = {
 // Define props for the component if any (currently none needed)
 interface NavigationPageProps {}
 
-// Component to handle map view updates
-const MapViewUpdater = ({ route, sourceCoords, center }: { route: [number, number][]; sourceCoords: [number, number] | null; center: [number, number] }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (route.length > 1) {
-      const bounds = L.latLngBounds(route);
-      if (bounds.isValid()) {
-        map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-      }
-    } else if (sourceCoords) {
-      map.flyTo(sourceCoords, 13);
-    } else {
-      map.flyTo(center, 13);
-    }
-  }, [map, route, sourceCoords, center]);
-
-  return null; // This component doesn't render anything
-};
-
-
-// Map component to handle Leaflet initialization and updates using react-leaflet
-const LeafletMapComponent = ({ sourceCoords, destinationCoords, route, segmentRisks, center }: { sourceCoords: [number, number] | null, destinationCoords: [number, number] | null, route: [number, number][], segmentRisks: SegmentRiskData[], center: [number, number] }) => {
-
-
-   // If map container ref isn't available yet, don't render map
-   // The parent div provides the space
-    if (typeof window === 'undefined') {
-        return <div className="w-full h-full flex items-center justify-center bg-muted"><p className="text-muted-foreground">Initializing Map...</p></div>; // Placeholder for SSR
-    }
-
-  return (
-        <MapContainer
-            // REMOVED key prop to prevent reinitialization
-            center={sourceCoords || center}
-            zoom={13}
-            style={{ height: '100%', width: '100%' }}
-            className="z-0" // Ensure map container has a base z-index if needed
-            // REMOVED whenCreated prop, using useMap hook instead for updates
-         >
-            <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-
-             {/* Component to handle map view updates */}
-             <MapViewUpdater route={route} sourceCoords={sourceCoords} center={center} />
-
-             {/* Source Marker */}
-             {sourceCoords && (
-                <Marker position={sourceCoords} icon={defaultIcon}>
-                    <Popup>Your current location</Popup>
-                </Marker>
-             )}
-
-             {/* Destination Marker */}
-             {destinationCoords && (
-                 <Marker position={destinationCoords} icon={defaultIcon}>
-                     <Popup>Destination: {destinationCoords.join(', ')}</Popup>
-                 </Marker>
-             )}
-
-             {/* Route Polylines */}
-              {route.length > 1 && route.map((_, idx) => {
-                  if (idx === route.length - 1) return null; // No segment after last point
-                  const startPoint = route[idx];
-                  const endPoint = route[idx + 1];
-                  const segmentInfo = segmentRisks[idx];
-
-                  // Basic check for valid points
-                  if (!startPoint || !endPoint || !Array.isArray(startPoint) || !Array.isArray(endPoint) || startPoint.length !== 2 || endPoint.length !== 2) {
-                     console.warn("Skipping invalid route segment at index:", idx);
-                     return null;
-                  }
-
-                  let color = 'blue';
-                  let riskLabel = "Low Risk";
-                  if (segmentInfo && segmentInfo.riskScore >= 4) {
-                    color = 'red';
-                    riskLabel = "High Risk";
-                  }
-                  else if (segmentInfo && segmentInfo.riskScore >= 2) {
-                    color = 'orange';
-                     riskLabel = "Moderate Risk";
-                  } else if (segmentInfo) {
-                      color = 'green';
-                  }
-
-
-                  return (
-                      <Polyline
-                          key={idx}
-                          positions={[startPoint, endPoint]}
-                          pathOptions={{ color: color, weight: 5, opacity: 0.8 }}
-                       >
-                          <LeafletTooltip sticky>
-                            <strong>{segmentInfo?.roadName || `Segment ${idx + 1}`}</strong><br/>Risk Score: {segmentInfo?.riskScore?.toFixed(1) ?? 'N/A'} ({riskLabel})
-                          </LeafletTooltip>
-                      </Polyline>
-                  );
-              })}
-        </MapContainer>
-  );
-};
-
 
 const NavigationPage: React.FC<NavigationPageProps> = () => {
   const router = useRouter();
@@ -325,6 +203,8 @@ const NavigationPage: React.FC<NavigationPageProps> = () => {
   const [segmentRisks, setSegmentRisks] = useState<SegmentRiskData[]>([]);
   const [selectedDestinationCoords, setSelectedDestinationCoords] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false); // State to track client-side mounting
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? 'DEMO_MAP_ID'; // Use your Map ID or fallback
 
 
   // Mock coordinates for landmarks
@@ -458,6 +338,14 @@ const NavigationPage: React.FC<NavigationPageProps> = () => {
          handleCalculateRoute(); // Perform the calculation
      };
 
+   if (!apiKey) {
+     return (
+       <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-gradient-to-br from-background to-muted/30">
+         <p className="text-destructive">Google Maps API Key is missing. Please configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.</p>
+       </div>
+     );
+   }
+
 
    return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-gradient-to-br from-background to-muted/30">
@@ -483,20 +371,66 @@ const NavigationPage: React.FC<NavigationPageProps> = () => {
 
           {/* Map container */}
          <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border border-border">
-           {isClient ? ( // Render LeafletMapComponent only on the client
-               <LeafletMapComponent
-                 sourceCoords={sourceCoords}
-                 destinationCoords={selectedDestinationCoords}
-                 route={route}
-                 segmentRisks={segmentRisks}
-                 center={chennaiCenter} // Pass center prop
-               />
-           ) : (
-                <div className="w-full h-full flex items-center justify-center bg-muted">
-                   <p className="text-muted-foreground">Loading Map...</p>
-                </div>
-           )}
-         </div>
+             {isClient ? (
+              <APIProvider apiKey={apiKey}>
+                 <Map
+                   mapId={mapId}
+                   defaultCenter={chennaiCenter}
+                   defaultZoom={13}
+                   gestureHandling={'greedy'}
+                   disableDefaultUI={true}
+                   className="w-full h-full rounded-b-lg"
+                   mapTypeId="roadmap"
+                 >
+                   {sourceCoords && (
+                     <AdvancedMarker position={sourceCoords} onClick={() => console.log("Source marker clicked")}>
+                       <Pin background={'hsl(var(--primary))'} glyphColor={'#fff'} borderColor={'#fff'} />
+                     </AdvancedMarker>
+                   )}
+
+                   {selectedDestinationCoords && (
+                     <AdvancedMarker position={selectedDestinationCoords} onClick={() => console.log("Destination marker clicked")}>
+                       <Pin background={'hsl(var(--destructive))'} glyphColor={'#fff'} borderColor={'#fff'} />
+                     </AdvancedMarker>
+                   )}
+
+                   {route.length > 1 &&
+                     route.map((point, index) => {
+                       if (index === 0) return null;
+                       const prevPoint = route[index - 1];
+                       const segmentInfo = segmentRisks[index - 1];
+
+                       let color = 'blue';
+                       let riskLabel = "Low Risk";
+
+                       if (segmentInfo && segmentInfo.riskScore >= 4) {
+                         color = 'red';
+                         riskLabel = "High Risk";
+                       } else if (segmentInfo && segmentInfo.riskScore >= 2) {
+                         color = 'orange';
+                         riskLabel = "Moderate Risk";
+                       } else if (segmentInfo) {
+                         color = 'green';
+                       }
+                       return (
+                         <Polyline
+                           key={index}
+                           path={[prevPoint, point]}
+                           strokeColor={color}
+                           strokeOpacity={0.8}
+                           strokeWeight={5}
+                         />
+                       );
+                     })}
+                 </Map>
+               </APIProvider>
+             ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-muted">
+                     <p className="text-muted-foreground">Loading Map...</p>
+                  </div>
+             )}
+           </div>
+
 
 
          {/* Input & Control Panel */}
@@ -588,5 +522,77 @@ const NavigationPage: React.FC<NavigationPageProps> = () => {
 };
 
 NavigationPage.displayName = 'NavigationPage';
+
+// React component to draw polyline on the map
+interface PolylineProps {
+  path: [number, number][];
+  strokeColor: string;
+  strokeOpacity: number;
+  strokeWeight: number;
+}
+
+const Polyline: React.FC<PolylineProps> = ({ path, strokeColor, strokeOpacity, strokeWeight }) => {
+  const encodedPath = encodePath(path);
+
+  return (
+    <google.maps.Polyline
+      path={encodedPath}
+      options={{
+        strokeColor,
+        strokeOpacity,
+        strokeWeight,
+        geodesic: true,
+        useGeoJsonGeometry: true,
+        zIndex: 1,
+      }}
+    />
+  );
+};
+
+function encodePath(path: [number, number][]) {
+  let encoded = '';
+
+  let plat = 0;
+  let plng = 0;
+
+  for (let i = 0; i < path.length; i++) {
+    const point = path[i];
+    const lat = point[0];
+    const lng = point[1];
+
+    let late5 = Math.round(lat * 1e5);
+    let lnge5 = Math.round(lng * 1e5);
+
+    let dLat = late5 - plat;
+    let dLng = lnge5 - plng;
+
+    plat = late5;
+    plng = lnge5;
+
+    encoded += encodeSignedNumber(dLat);
+    encoded += encodeSignedNumber(dLng);
+  }
+
+  return encoded;
+}
+
+function encodeSignedNumber(num: number) {
+  let sgn_val = num < 0 ? ~(num << 1) : (num << 1);
+  let encoded = encodeNumber(sgn_val);
+  return encoded;
+}
+
+function encodeNumber(num: number) {
+  let encoded = '';
+
+  while (num >= 0x20) {
+    encoded += String.fromCharCode((0x20 | (num & 0x1f)) + 63);
+    num >>= 5;
+  }
+
+  encoded += String.fromCharCode(num + 63);
+  return encoded;
+}
+
 
 export default NavigationPage;
