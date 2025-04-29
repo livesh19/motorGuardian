@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Import usePathname
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   SidebarProvider,
@@ -36,6 +36,7 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children, bikeType }: AppLayoutProps) {
   const router = useRouter();
+  const pathname = usePathname(); // Get pathname using the hook
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [rideCondition, setRideCondition] = useState<'Urban' | 'Highway' | 'Rainy'>('Urban'); // Default condition
 
@@ -88,7 +89,7 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
                  <SidebarMenuItem>
                      <SidebarMenuButton
                         href={bikeType === 'obd' ? "/dashboard-obd" : "/dashboard-non-obd"}
-                        isActive={router.pathname.startsWith('/dashboard')} // Check if active based on path
+                        isActive={pathname?.startsWith('/dashboard')} // Use pathname
                         tooltip="Dashboard"
                         >
                         <Gauge />
@@ -99,7 +100,7 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
                   <SidebarMenuItem>
                      <SidebarMenuButton
                         href="/"
-                        isActive={router.pathname === '/'} // Check if active based on path
+                        isActive={pathname === '/'} // Use pathname
                         tooltip="Navigation Map"
                         >
                         <Navigation />
@@ -200,7 +201,7 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
                  <AnimatePresence mode="wait">
                  <motion.div
-                    key={router.pathname + rideCondition} // Use pathname + rideCondition for transitions
+                    key={pathname + rideCondition} // Use pathname for transitions
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
