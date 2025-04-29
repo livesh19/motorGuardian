@@ -1,3 +1,4 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -7,21 +8,11 @@ export function cn(...inputs: ClassValue[]) {
 
 
 // --- Risk Calculation Logic Removed ---
-// The calculateRiskPerSegment function was removed because it depended on Leaflet (L)
-// which should only run on the client. This logic should be moved to the
-// specific client component that needs it (e.g., navigation-page.tsx).
+// The calculateRiskPerSegment function and related helpers were removed
+// as the heatmap and risk calculation feature using Leaflet is no longer implemented.
+// This logic relied on client-side libraries not suitable for the current setup.
 
-// Interface definitions remain if needed by other non-Leaflet utilities
-// interface AccidentData {
-//   latitude: number;
-//   longitude: number;
-//   count: number;
-// }
+// Interface definitions removed as they are no longer used.
+// interface AccidentData { ... }
+// interface RoadSegment { ... }
 
-// interface RoadSegment {
-//   from: [number, number];
-//   to: [number, number];
-//   distanceKm: number;
-//   roadName: string;
-//   riskScore: number; // This might be pre-calculated or calculated here
-// }
