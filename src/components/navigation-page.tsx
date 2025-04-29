@@ -112,7 +112,7 @@ const calculateRoute = (
   for (const segment of roadGraph) {
     if (segment.from[0] === current[0] && segment.from[1] === current[1]) {
         // Estimate remaining cost (simple heuristic: distance to end + risk)
-        const remainingDistance = L.latLng(segment.to).distanceTo(L.latLng(end)) / 1000; // Approx distance
+        const remainingDistance = distance(segment.to, end); // Approx distance
         const estimatedTotalCost = (segment.distanceKm + beta * segment.riskScore) + (remainingDistance + beta * 2); // Assume average risk=2 for remaining
 
         if (estimatedTotalCost < minFirstStepCost) {
@@ -153,7 +153,7 @@ const calculateRoute = (
           if(!(current[0] === end[0] && current[1] === end[1])) {
              route.push(end);
              // Add estimated distance/risk for the last leg if needed for totals
-             const lastLegDistance = L.latLng(current).distanceTo(L.latLng(end)) / 1000;
+             const lastLegDistance = distance(current, end);
              totalDistance += lastLegDistance;
              // totalRisk += some_estimated_risk; // Optional: Add risk for the last visual leg
              segmentRisks.push({ roadName: "Direct to Destination", riskScore: 2, accidentCount: 10}); // Example placeholder
@@ -165,7 +165,7 @@ const calculateRoute = (
       // If no segments found from start, just draw a line to the end
        if(!(current[0] === end[0] && current[1] === end[1])) {
          route.push(end);
-         totalDistance = L.latLng(start).distanceTo(L.latLng(end)) / 1000;
+         totalDistance = distance(start, end);
          totalRisk = 2 * totalDistance; // Estimate risk based on distance
          segmentRisks.push({ roadName: "Direct Route", riskScore: 2, accidentCount: Math.round(totalRisk * 5)});
        }
@@ -175,6 +175,25 @@ const calculateRoute = (
   return { route, totalDistance, totalRisk, segmentRisks };
 };
 
+
+// Distance calculation function
+const distance = (coord1: [number, number], coord2: [number, number]): number => {
+    const R = 6371; // Radius of the earth in km
+    const lat1 = coord1[0] * Math.PI / 180;
+    const lon1 = coord1[1] * Math.PI / 180;
+    const lat2 = coord2[0] * Math.PI / 180;
+    const lon2 = coord2[1] * Math.PI / 180;
+
+    const dlon = lon2 - lon1;
+    const dlat = lat2 - lat1;
+
+    const a = Math.sin(dlat / 2) * Math.sin(dlat / 2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(dlon / 2) * Math.sin(dlon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+}
 
 // Framer Motion popup variants
 const popupVariants: Variants = {
@@ -532,21 +551,29 @@ interface PolylineProps {
 }
 
 const Polyline: React.FC<PolylineProps> = ({ path, strokeColor, strokeOpacity, strokeWeight }) => {
-  const encodedPath = encodePath(path);
+  // Encoded path is incompatible with react-google-maps. Skipping.
+  //const encodedPath = encodePath(path);
 
-  return (
-    <google.maps.Polyline
-      path={encodedPath}
-      options={{
-        strokeColor,
-        strokeOpacity,
-        strokeWeight,
-        geodesic: true,
-        useGeoJsonGeometry: true,
-        zIndex: 1,
-      }}
-    />
-  );
+  // Instead, return a series of Polyline components.
+  return path.map((coord, index) => {
+    if (index === 0) return null;
+    const prevCoord = path[index - 1];
+
+    return (
+      <google.maps.Polyline
+        key={`${prevCoord[0]}-${prevCoord[1]}-${coord[0]}-${coord[1]}`} // Unique key
+        path={[prevCoord, coord]}
+        options={{
+          strokeColor,
+          strokeOpacity,
+          strokeWeight,
+          geodesic: true,
+          useGeoJsonGeometry: true,
+          zIndex: 1,
+        }}
+      />
+    );
+  });
 };
 
 function encodePath(path: [number, number][]) {
