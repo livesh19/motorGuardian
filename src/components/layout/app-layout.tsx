@@ -26,7 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bell, Bike, Gauge, MapPin, BarChart, LogOut, Settings, User, ShieldAlert, LifeBuoy, Menu, CloudRain, Sun, TrafficCone, FileText } from 'lucide-react';
+import { Bell, Bike, Gauge, MapPin, BarChart, LogOut, Settings, User, ShieldAlert, LifeBuoy, Menu, CloudRain, Sun, TrafficCone, FileText, Navigation } from 'lucide-react'; // Added Navigation icon
 import SafetyTipsModal from '@/components/safety-tips-modal'; // Import the modal
 
 interface AppLayoutProps {
@@ -88,11 +88,22 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
                  <SidebarMenuItem>
                      <SidebarMenuButton
                         href={bikeType === 'obd' ? "/dashboard-obd" : "/dashboard-non-obd"}
-                        isActive={true}
+                        isActive={router.pathname.startsWith('/dashboard')} // Check if active based on path
                         tooltip="Dashboard"
                         >
                         <Gauge />
                         <span>Dashboard</span>
+                     </SidebarMenuButton>
+                 </SidebarMenuItem>
+                 {/* Add Navigation Link */}
+                  <SidebarMenuItem>
+                     <SidebarMenuButton
+                        href="/"
+                        isActive={router.pathname === '/'} // Check if active based on path
+                        tooltip="Navigation Map"
+                        >
+                        <Navigation />
+                        <span>Navigation</span>
                      </SidebarMenuButton>
                  </SidebarMenuItem>
                  <SidebarMenuItem>
@@ -101,7 +112,7 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
                         <span>Safety Tips</span>
                      </SidebarMenuButton>
                  </SidebarMenuItem>
-                 {/* Add more menu items as needed */}
+                 {/* Ride Condition Dropdown */}
                  <SidebarMenuItem>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -189,7 +200,7 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
             <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
                  <AnimatePresence mode="wait">
                  <motion.div
-                    key={router.pathname} // Use pathname for smooth transitions between dashboards
+                    key={router.pathname + rideCondition} // Use pathname + rideCondition for transitions
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
@@ -213,4 +224,3 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
     </SidebarProvider>
   );
 }
-
