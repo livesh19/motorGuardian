@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -394,7 +392,13 @@ const NavigationPage: React.FC<NavigationPageProps> = () => {
               <APIProvider apiKey={apiKey}>
                  <Map
                    mapId={mapId}
-                   defaultCenter={chennaiCenter}
+                   defaultCenter={
+                     sourceCoords && sourceCoords[0] && sourceCoords[1]
+                       ? { lat: sourceCoords[0], lng: sourceCoords[1] }
+                       : chennaiCenter && chennaiCenter[0] && chennaiCenter[1]
+                         ? { lat: chennaiCenter[0], lng: chennaiCenter[1] }
+                         : { lat: 13.0827, lng: 80.2707 } // Fallback to a default Chennai location
+                   }
                    defaultZoom={13}
                    gestureHandling={'greedy'}
                    disableDefaultUI={true}
