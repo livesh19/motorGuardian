@@ -1,4 +1,5 @@
-tsx
+'use client';
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,10 +7,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useToast } from '@/hooks/use-toast';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, Circle, Popup, Tooltip } from 'react-leaflet';
-// Removed HeatMapLayer import as dependency is removed
-// import HeatMapLayer from './heatmap-layer';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import L from 'leaflet'; // Leaflet is safe to import here due to 'use client'
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
@@ -17,8 +16,9 @@ import { Label } from "@/components/ui/label";
 // Import mock accident data
 import accidentsData from '@/data/chennai-accidents.json';
 
-//Import utils
-import { calculateRiskPerSegment } from '@/lib/utils';
+// Import utils (only cn is used now)
+// Removed calculateRiskPerSegment import
+import { cn } from '@/lib/utils';
 
 // Correctly import the custom marker icon
 import markerIconPng from "leaflet/dist/images/marker-icon.png";
@@ -228,13 +228,6 @@ const NavigationPage: React.FC = () => {
     };
 
 
-  // Calculate the risk per segment (Consider doing this on the server or build step for performance)
-//   const riskPerSegment = useMemo(() => {
-//     return calculateRiskPerSegment(accidentsData, mockedRoadGraph);
-//   }, []);
-
-
-
   // Geolocation hook
   useEffect(() => {
     if (navigator.geolocation) {
@@ -288,7 +281,7 @@ const NavigationPage: React.FC = () => {
   };
 
   // Update route when a destination is selected or beta changes
-   const handleCalculateRoute = () => {
+   const handleCalculateRoute = useCallback(() => { // Wrapped in useCallback
       if (destination && sourceCoords) {
           const destCoords = landmarkCoords[destination];
           if (destCoords) {
@@ -329,19 +322,16 @@ const NavigationPage: React.FC = () => {
           setShowWarningPopup(false);
           setSelectedDestinationCoords(null);
       }
-  };
+  }, [destination, sourceCoords, beta, toast]); // Dependencies for useCallback
+
 
    // Trigger calculation when destination or beta changes
    useEffect(() => {
-     // We call handleCalculateRoute directly here, or trigger it via a button click
-     // handleCalculateRoute(); // Auto-calculate on change
-     // If you want calculation only on button click, remove this useEffect hook
-     // and rely on the "Find Route" button's onClick handler.
-     // Let's keep it manual for now, triggered by the button.
       if (isRouteCalculated) { // Recalculate if already calculated and beta changes
           handleCalculateRoute();
        }
-   }, [beta, destination, sourceCoords]); // Dependencies for recalculation
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [beta, destination, sourceCoords, isRouteCalculated, handleCalculateRoute]); // Added handleCalculateRoute as dependency
 
 
    // Function to handle "Find Route" button click
@@ -352,14 +342,6 @@ const NavigationPage: React.FC = () => {
         }
         handleCalculateRoute(); // Perform the calculation
     };
-
-
-  // Function to generate heatmap data from accident data
-  // const generateHeatmapData = (data: AccidentData[]): L.LatLngExpression[] => {
-  //   return data.map(accident => [accident.latitude, accident.longitude, accident.count * 0.1] as L.LatLngExpression); // Intensity based on count
-  // };
-
-  // const heatmapData = useMemo(() => generateHeatmapData(accidentsData), []);
 
   const chennaiCenter: [number, number] = [13.05, 80.25]; // Slightly adjusted center
 
@@ -392,8 +374,6 @@ const NavigationPage: React.FC = () => {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
-          {/* Heatmap layer removed as dependency is gone */}
-          {/* <HeatMapLayer points={heatmapData} longitudeExtractor={(m: any) => m[1]} latitudeExtractor={(m: any) => m[0]} intensityExtractor={(m: any) => m[2]} radius={25} blur={15} max={1.0} /> */}
 
           {/* Source Marker */}
           {sourceCoords && (
@@ -433,7 +413,6 @@ const NavigationPage: React.FC = () => {
                     <div>
                         <strong>{segmentInfo.roadName || `Segment ${idx + 1}`}</strong><br/>
                         Risk Score: {segmentInfo.riskScore.toFixed(1)}<br/>
-                        {/* Est. Accidents: {segmentInfo.accidentCount} */}
                      </div>
                  </Tooltip>
                </Polyline>
@@ -451,10 +430,6 @@ const NavigationPage: React.FC = () => {
           value={destination}
           onChange={(e) => {
               setDestination(e.target.value);
-               // Clear route when typing new destination
-               // setIsRouteCalculated(false);
-               // setRoute([]);
-               // setShowWarningPopup(false);
           }}
           list="landmarks"
           className="bg-input border-border focus:ring-primary"
