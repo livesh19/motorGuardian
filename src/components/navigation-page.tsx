@@ -4,8 +4,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Variants } from "framer-motion";
-// Removed RadioGroup imports as beta preference is removed
-// import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,7 +13,7 @@ import {
   Map,
   AdvancedMarker,
   Pin,
-  // InfoWindow, // Not currently used
+  InfoWindow, // Keep if needed for markers later
   useMap,
   MapCameraChangedEvent,
   MapCameraProps,
@@ -23,13 +21,6 @@ import {
 
 // Import utils
 import { cn } from '@/lib/utils';
-
-// Define the segment risk data type (kept for potential future use, but not used now)
-interface SegmentRiskData {
-  roadName: string;
-  riskScore: number;
-  accidentCount: number;
-}
 
 // Mock coordinates for landmarks
 const landmarkCoords: { [key: string]: google.maps.LatLngLiteral } = {
@@ -47,13 +38,27 @@ const landmarkCoords: { [key: string]: google.maps.LatLngLiteral } = {
     "Koyambedu": { lat: 13.0731, lng: 80.1931 },
 };
 
+// Mock Accident Data (Example locations in Chennai)
+const mockAccidentData: google.maps.LatLngLiteral[] = [
+  { lat: 13.041, lng: 80.235 }, // T. Nagar
+  { lat: 13.043, lng: 80.237 }, // T. Nagar
+  { lat: 13.058, lng: 80.264 }, // Anna Salai near Spencer Plaza
+  { lat: 13.056, lng: 80.266 }, // Anna Salai
+  { lat: 13.007, lng: 80.221 }, // Guindy Kathipara Junction area
+  { lat: 13.009, lng: 80.223 }, // Guindy
+  { lat: 13.000, lng: 80.268 }, // Besant Nagar Beach Road
+  { lat: 12.991, lng: 80.248 }, // OMR Tidel Park area
+  { lat: 12.988, lng: 80.246 }, // OMR
+  { lat: 13.080, lng: 80.271 }, // Central Station surroundings
+  { lat: 13.036, lng: 80.270 }, // Mylapore Tank area
+  { lat: 13.074, lng: 80.195 }, // Koyambedu Bus Stand area
+  // Add more points for a denser heatmap
+  { lat: 13.045, lng: 80.240 },
+  { lat: 13.050, lng: 80.255 },
+  { lat: 13.005, lng: 80.259 }, // Adyar
+  { lat: 13.061, lng: 80.249 }, // Nungambakkam High Road
+];
 
-// Framer Motion popup variants (kept for potential future use)
-const popupVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-  exit: { opacity: 0, y: 20, transition: { duration: 0.2 } },
-};
 
 // Component to render Directions using DirectionsRenderer
 const DirectionsRendererComponent: React.FC<{ directionsResult: google.maps.DirectionsResult | null }> = ({ directionsResult }) => {
@@ -65,6 +70,7 @@ const DirectionsRendererComponent: React.FC<{ directionsResult: google.maps.Dire
 
         // Initialize or get the existing DirectionsRenderer instance
         if (!directionsRendererRef.current) {
+            console.log("Initializing DirectionsRenderer");
             directionsRendererRef.current = new google.maps.DirectionsRenderer({
                  suppressMarkers: true, // Use AdvancedMarker for start/end points
                  polylineOptions: {
@@ -78,18 +84,22 @@ const DirectionsRendererComponent: React.FC<{ directionsResult: google.maps.Dire
 
         // Update directions if they change
         if (directionsResult) {
+            console.log("Setting directions on renderer:", directionsResult);
             directionsRendererRef.current.setDirections(directionsResult);
         } else {
             // Clear directions if result is null
-            directionsRendererRef.current.setDirections({ routes: [] });
+            console.log("Clearing directions from renderer");
+            if (directionsRendererRef.current) {
+                 directionsRendererRef.current.setDirections({ routes: [] });
+            }
         }
 
          // Cleanup function: Remove directions from map when component unmounts or dependencies change significantly
         return () => {
             if (directionsRendererRef.current) {
+                 console.log("Cleaning up DirectionsRenderer");
                  directionsRendererRef.current.setMap(null); // Detach from map
-                 // Optionally, nullify the ref if you want a fresh instance next time
-                 // directionsRendererRef.current = null;
+                 // directionsRendererRef.current = null; // Remove instance if you want a new one next time
             }
         };
     }, [map, directionsResult]); // Re-run when map instance or directionsResult changes
@@ -97,27 +107,75 @@ const DirectionsRendererComponent: React.FC<{ directionsResult: google.maps.Dire
     return null; // This component manages the renderer but doesn't render direct DOM elements
 };
 
+// Component to render Heatmap
+const HeatmapLayerComponent: React.FC<{ data: google.maps.LatLngLiteral[] }> = ({ data }) => {
+    const map = useMap();
+    const heatmapRef = useRef<google.maps.visualization.HeatmapLayer | null>(null);
+
+    useEffect(() => {
+        if (!map || !google.maps.visualization) {
+            console.log("Map or visualization library not ready for heatmap.");
+            return;
+        }
+
+        // Convert LatLngLiteral data to LatLng objects for the HeatmapLayer
+        const heatmapData = data.map(coord => new google.maps.LatLng(coord.lat, coord.lng));
+
+        // Initialize or update the HeatmapLayer
+        if (!heatmapRef.current) {
+            console.log("Initializing HeatmapLayer with data:", heatmapData);
+            heatmapRef.current = new google.maps.visualization.HeatmapLayer({
+                data: heatmapData,
+                map: map,
+                radius: 20, // Adjust radius as needed
+                opacity: 0.6, // Adjust opacity
+            });
+        } else {
+            console.log("Updating HeatmapLayer data");
+            heatmapRef.current.setData(heatmapData);
+            // Ensure it's still on the map (might be cleared by other effects)
+            if (heatmapRef.current.getMap() !== map) {
+                heatmapRef.current.setMap(map);
+            }
+        }
+
+        // Cleanup function
+        return () => {
+            if (heatmapRef.current) {
+                console.log("Cleaning up HeatmapLayer");
+                heatmapRef.current.setMap(null);
+                // heatmapRef.current = null; // Optional: nullify if you always want a new instance
+            }
+        };
+    }, [map, data]); // Re-run when map instance or data changes
+
+    return null; // Component manages the layer, doesn't render DOM
+};
+
 
 const NavigationPage: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
   const [sourceCoords, setSourceCoords] = useState<google.maps.LatLngLiteral | null>(null);
-  const [initialCenter, setInitialCenter] = useState<google.maps.LatLngLiteral>({ lat: 13.05, lng: 80.25 }); // Fixed initial center
+  const chennaiCenter: google.maps.LatLngLiteral = { lat: 13.05, lng: 80.25 }; // Fixed center
   const [destination, setDestination] = useState<string>('');
   const [isRouteCalculated, setIsRouteCalculated] = useState<boolean>(false);
-  // const [showWarningPopup, setShowWarningPopup] = useState(false); // Removed as risk data is not used
-  // const [beta, setBeta] = useState<number>(2); // Removed beta preference
   const [totalDistance, setTotalDistance] = useState<string>('');
   const [totalDuration, setTotalDuration] = useState<string>('');
-  // const [segmentRisks, setSegmentRisks] = useState<SegmentRiskData[]>([]); // Removed risk data
   const [selectedDestinationCoords, setSelectedDestinationCoords] = useState<google.maps.LatLngLiteral | null>(null);
   const [isClient, setIsClient] = useState(false); // State to track client-side mounting
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? 'DEMO_MAP_ID';
-  const mapRef = useRef<google.maps.Map | null>(null); // Ref to store the map instance
   const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
   const [isFetchingLocation, setIsFetchingLocation] = useState(true);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [mapCenter, setMapCenter] = useState<google.maps.LatLngLiteral>(chennaiCenter); // State for map center
+
+   // Use useMap hook to get the map instance - needed for heatmap layer
+  // const map = useMap(); // This needs to be used inside a Map component context
+
+  // Ref for map instance to control bounds etc. outside of hooks if needed
+  const mapRef = useRef<google.maps.Map | null>(null);
 
 
   // Geolocation and client-side check hook
@@ -128,26 +186,28 @@ const NavigationPage: React.FC = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          if (isFinite(latitude) && isFinite(longitude)) {
-            const coords = { lat: latitude, lng: longitude };
-            setSourceCoords(coords);
-            setInitialCenter(coords); // Center map on fetched location
-            toast({ title: "Location Found", description: `Current location set.`, duration: 3000 });
-          } else {
-            console.error("Invalid coordinates received:", latitude, longitude);
-            // Fallback to default if coords are invalid
-            const defaultLocation = { lat: 13.0604, lng: 80.2478 }; // Nungambakkam
-            setSourceCoords(defaultLocation);
-            setInitialCenter(defaultLocation);
-            toast({ title: "Location Error", description: "Received invalid coordinates. Using default.", variant: "destructive", duration: 5000 });
-          }
+          console.log("Geolocation success:", latitude, longitude);
+           // Validate coordinates
+           if (typeof latitude === 'number' && isFinite(latitude) &&
+               typeof longitude === 'number' && isFinite(longitude)) {
+               const coords = { lat: latitude, lng: longitude };
+               setSourceCoords(coords);
+               setMapCenter(coords); // Center map on fetched location
+               toast({ title: "Location Found", description: `Current location set.`, duration: 3000 });
+           } else {
+                console.error("Invalid coordinates received:", latitude, longitude);
+                const defaultLocation = landmarkCoords["Nungambakkam"]; // Fallback
+                setSourceCoords(defaultLocation);
+                setMapCenter(defaultLocation);
+                toast({ title: "Location Error", description: "Received invalid coordinates. Using Nungambakkam.", variant: "destructive", duration: 5000 });
+           }
           setIsFetchingLocation(false);
         },
         (error) => {
           console.error("Error getting location:", error);
-          const defaultLocation = { lat: 13.0604, lng: 80.2478 }; // Nungambakkam
+          const defaultLocation = landmarkCoords["Nungambakkam"]; // Use a default landmark
           setSourceCoords(defaultLocation);
-          setInitialCenter(defaultLocation);
+          setMapCenter(defaultLocation);
           toast({ title: "Location Error", description: "Could not get location. Using default: Nungambakkam.", variant: "destructive", duration: 5000 });
           setIsFetchingLocation(false);
         },
@@ -155,9 +215,9 @@ const NavigationPage: React.FC = () => {
       );
     } else {
       console.error("Geolocation is not supported.");
-      const defaultLocation = { lat: 13.0604, lng: 80.2478 }; // Nungambakkam
+      const defaultLocation = landmarkCoords["Nungambakkam"]; // Use a default landmark
       setSourceCoords(defaultLocation);
-      setInitialCenter(defaultLocation);
+      setMapCenter(defaultLocation);
       toast({ title: "Location Unavailable", description: "Geolocation not supported. Using default: Nungambakkam.", variant: "destructive", duration: 5000 });
       setIsFetchingLocation(false);
     }
@@ -172,29 +232,36 @@ const NavigationPage: React.FC = () => {
       }
       setIsFetchingLocation(true);
       setSourceCoords(null); // Clear previous while fetching
+      setMapCenter(chennaiCenter); // Reset center while fetching
       navigator.geolocation.getCurrentPosition(
           (position) => {
               const { latitude, longitude } = position.coords;
-              if (isFinite(latitude) && isFinite(longitude)) {
+              console.log("Manual location fetch success:", latitude, longitude);
+              if (typeof latitude === 'number' && isFinite(latitude) &&
+                  typeof longitude === 'number' && isFinite(longitude)) {
                  const newCoords = { lat: latitude, lng: longitude };
                  setSourceCoords(newCoords);
-                 setInitialCenter(newCoords); // Re-center map
+                 setMapCenter(newCoords); // Re-center map
                  toast({ title: "Location Refreshed", description: "Using current location.", duration: 3000 });
                   // Clear previous route if location changes
                   setDirectionsResult(null);
                   setIsRouteCalculated(false);
+                  setTotalDistance('');
+                  setTotalDuration('');
               } else {
-                const defaultLocation = { lat: 13.0604, lng: 80.2478 }; // Nungambakkam
+                console.error("Invalid manual coordinates received:", latitude, longitude);
+                const defaultLocation = landmarkCoords["Nungambakkam"];
                 setSourceCoords(defaultLocation);
-                setInitialCenter(defaultLocation);
-                toast({ title: "Location Error", description: "Received invalid coordinates. Using default.", variant: "destructive" });
+                setMapCenter(defaultLocation);
+                toast({ title: "Location Error", description: "Received invalid coordinates. Using Nungambakkam.", variant: "destructive" });
               }
               setIsFetchingLocation(false);
           },
           (error) => {
-              const defaultLocation = { lat: 13.0604, lng: 80.2478 }; // Nungambakkam
+               console.error("Error getting manual location:", error);
+               const defaultLocation = landmarkCoords["Nungambakkam"];
               setSourceCoords(defaultLocation);
-              setInitialCenter(defaultLocation);
+              setMapCenter(defaultLocation);
               toast({ title: "Location Error", description: "Could not get current location. Using default.", variant: "destructive" });
               setIsFetchingLocation(false);
           },
@@ -206,6 +273,7 @@ const NavigationPage: React.FC = () => {
    // Function to calculate route using Google Maps Directions Service
    const handleCalculateRoute = useCallback(async () => {
      if (!isClient || !sourceCoords || !destination) return;
+     console.log("Calculating route from:", sourceCoords, "to:", destination);
 
      const destCoords = landmarkCoords[destination];
      if (!destCoords) {
@@ -219,6 +287,10 @@ const NavigationPage: React.FC = () => {
      setIsRouteCalculated(false);
 
      try {
+        // Ensure DirectionsService is available
+        if (!google || !google.maps || !google.maps.DirectionsService) {
+            throw new Error("Google Maps Directions Service not loaded.");
+        }
         const directionsService = new google.maps.DirectionsService();
         const request: google.maps.DirectionsRequest = {
             origin: sourceCoords,
@@ -227,18 +299,33 @@ const NavigationPage: React.FC = () => {
         };
 
         const response = await directionsService.route(request);
+        console.log("Directions response:", response);
 
         if (response.status === 'OK' && response.routes.length > 0) {
-            setDirectionsResult(response);
+            setDirectionsResult(response); // Trigger the DirectionsRendererComponent
             setIsRouteCalculated(true);
             const route = response.routes[0].legs[0];
             setTotalDistance(route.distance?.text || 'N/A');
             setTotalDuration(route.duration?.text || 'N/A');
+
              // Fit map bounds to the route
-             if (mapRef.current && response.routes[0].bounds) {
+            if (mapRef.current && response.routes[0].bounds) {
+                console.log("Fitting map to bounds:", response.routes[0].bounds);
                 mapRef.current.fitBounds(response.routes[0].bounds);
+                 // Adjust zoom slightly after fitBounds if needed
+                // setTimeout(() => {
+                //   if (mapRef.current) {
+                //     const currentZoom = mapRef.current.getZoom();
+                //     if (currentZoom && currentZoom > 15) { // Don't zoom in too much
+                //       mapRef.current.setZoom(15);
+                //     }
+                //   }
+                // }, 100);
+            } else {
+                 console.log("Map ref or route bounds not available for fitting.");
+                 // Manually center if bounds fitting fails
+                 setMapCenter(sourceCoords); // Or perhaps midpoint?
             }
-            // setShowWarningPopup(false); // Reset warning popup (if re-added)
         } else {
             console.error("Directions request failed due to " + response.status);
             toast({ title: "Route Error", description: `Could not find a route: ${response.status}`, variant: "destructive" });
@@ -285,23 +372,27 @@ const NavigationPage: React.FC = () => {
                 setIsRouteCalculated(false);
                 setTotalDistance('');
                 setTotalDuration('');
+                 // Optionally reset map view
+                 if (sourceCoords) setMapCenter(sourceCoords);
+                 else setMapCenter(chennaiCenter);
+                 if(mapRef.current) mapRef.current.setZoom(13);
             }
          }
-     }, [destination, isClient]);
+     }, [destination, isClient, sourceCoords]); // Add sourceCoords dependency
 
-     // Adjust map center when initialCenter changes (after location fetch)
+     // Camera handling - might conflict with fitBounds, use carefully
      const handleCameraChange = useCallback((ev: MapCameraChangedEvent) => {
-        if (mapRef.current && !isRouteCalculated) { // Only update if not showing a route
-             // mapRef.current.moveCamera({ center: ev.detail.center, zoom: ev.detail.zoom });
-             // console.log("Camera changed:", ev.detail);
-        }
-     }, [isRouteCalculated]);
+         // console.log("Camera changed:", ev.detail);
+         // setMapCenter(ev.detail.center); // Update center state if needed
+     }, []);
 
-     // Initialize map center based on fetched location or default
-     const initialCameraProps: MapCameraProps = {
-        center: initialCenter,
-        zoom: 13
-     };
+     // Callback to get the map instance once it's loaded
+     const onMapLoad = useCallback((mapInstance: google.maps.Map) => {
+         console.log("Map instance loaded:", mapInstance);
+         mapRef.current = mapInstance;
+         // We might need to re-apply heatmap or directions if they were set before map loaded
+         // This can happen with complex state interactions.
+     }, []);
 
 
    if (!apiKey) {
@@ -315,30 +406,21 @@ const NavigationPage: React.FC = () => {
 
    return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 md:p-8 bg-gradient-to-br from-background to-muted/30">
-       {/* Warning Popup (Placeholder - logic removed) */}
-       {/* <AnimatePresence>
-         {showWarningPopup && (
-           <motion.div ... >
-             <p>⚠️ Route includes high-risk zones...</p>
-           </motion.div>
-         )}
-       </AnimatePresence> */}
 
        {/* Map container */}
         <div className="w-full max-w-4xl h-[400px] md:h-[500px] mb-4 rounded-lg overflow-hidden shadow-lg border border-border">
           {isClient ? (
-            <APIProvider apiKey={apiKey}>
+            <APIProvider apiKey={apiKey} libraries={['visualization']}> {/* Load visualization library */}
                <Map
-                 ref={mapRef} // Assign ref to map instance
                  mapId={mapId}
-                 defaultCenter={initialCenter} // Use state for initial center
-                 defaultZoom={13}
+                 center={mapCenter} // Controlled center
+                 zoom={13} // Controlled zoom (can be adjusted by fitBounds)
                  gestureHandling={'greedy'}
                  disableDefaultUI={true}
                  className="w-full h-full"
                  mapTypeId="roadmap"
-                 // onCameraChanged={handleCameraChange} // Optional: handle camera changes
-                 {...initialCameraProps} // Control camera state if needed
+                 onCameraChanged={handleCameraChange}
+                 onLoad={onMapLoad} // Capture map instance
                >
                  {/* Source Marker */}
                  {!isFetchingLocation && sourceCoords && (
@@ -354,10 +436,11 @@ const NavigationPage: React.FC = () => {
                    </AdvancedMarker>
                  )}
 
-                 {/* Directions Renderer */}
-                 {isRouteCalculated && directionsResult && (
-                     <DirectionsRendererComponent directionsResult={directionsResult} />
-                 )}
+                 {/* Directions Renderer Component */}
+                 <DirectionsRendererComponent directionsResult={directionsResult} />
+
+                 {/* Heatmap Layer Component */}
+                 <HeatmapLayerComponent data={mockAccidentData} />
 
                </Map>
             </APIProvider>
@@ -390,8 +473,6 @@ const NavigationPage: React.FC = () => {
            ))}
          </datalist>
 
-         {/* Route Preference Radio Group Removed */}
-         {/* <div className='...'> ... </div> */}
 
          {/* Action Buttons */}
          <div className='flex flex-col sm:flex-row gap-3'>
@@ -426,9 +507,7 @@ const NavigationPage: React.FC = () => {
              <h3 className="font-semibold mb-1 text-sm text-foreground">Route Summary</h3>
              <p>Distance: <span className="font-medium text-primary">{totalDistance}</span></p>
              <p>Est. Duration: <span className="font-medium text-primary">{totalDuration}</span></p>
-             {/* Risk info removed */}
-             {/* <p>Avg. Risk Score: ...</p> */}
-             {/* {segmentRisks.filter(s => s.riskScore >= 4).length > 0 && ( ... )} */}
+             <p className="mt-1 text-muted-foreground">Heatmap shows areas with higher mock accident frequency.</p>
            </motion.div>
          )}
        </motion.div>
