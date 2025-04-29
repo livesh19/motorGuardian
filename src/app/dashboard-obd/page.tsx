@@ -7,7 +7,7 @@ import SpeedRpmChart from '@/components/dashboard/obd/speed-rpm-chart';
 import DiagnosticsCard from '@/components/dashboard/diagnostics-card';
 import TripHistoryTable from '@/components/dashboard/trip-history-table';
 import RiderHealthGauge from '@/components/dashboard/rider-health-gauge';
-import { Speedometer, Zap, Droplet, Battery, Fuel, Thermometer } from 'lucide-react';
+import { GaugeCircle, Zap, Droplet, Battery, Fuel, Thermometer } from 'lucide-react'; // Replaced Speedometer with GaugeCircle
 
 interface ObdDashboardProps {
   rideCondition: 'Urban' | 'Highway' | 'Rainy'; // Receive from AppLayout
@@ -42,7 +42,7 @@ const ObdDashboard: React.FC<ObdDashboardProps> = ({ rideCondition = 'Urban' }) 
 
       {/* Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <ObdMetricsCard title="Speed" value={speed} unit="km/h" Icon={Speedometer} colorClass="text-blue-400" />
+        <ObdMetricsCard title="Speed" value={speed} unit="km/h" Icon={GaugeCircle} colorClass="text-blue-400" /> {/* Used GaugeCircle */}
         <ObdMetricsCard title="RPM" value={rpm} unit="" Icon={Zap} colorClass="text-yellow-400" />
         <ObdMetricsCard title="Throttle Pos." value={throttlePosition} unit="%" Icon={Fuel} colorClass="text-purple-400" />
         <ObdMetricsCard title="Coolant Temp." value={coolantTemp} unit="°C" Icon={Thermometer} colorClass="text-orange-400" />

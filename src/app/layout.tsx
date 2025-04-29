@@ -16,7 +16,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} dark`}> {/* Apply font variables and dark class */}
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable} dark`}>
+      {/* Apply font variables and dark class. No whitespace allowed between <html> and <body> */}
       <body className={`antialiased bg-background text-foreground min-h-screen flex flex-col`}>
         {children}
         <Toaster /> {/* Add Toaster component */}
