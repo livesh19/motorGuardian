@@ -7,8 +7,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useToast } from '@/hooks/use-toast';
 import 'leaflet/dist/leaflet.css';
-import L, { Map as LeafletMap } from 'leaflet'; // Leaflet is safe to import here due to 'use client'
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip as LeafletTooltip, Popup } from 'react-leaflet'; // Import react-leaflet components
+import L, { Map as LeafletMap, LatLngBoundsLiteral } from 'leaflet'; // Leaflet is safe to import here due to 'use client'
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip as LeafletTooltip, Popup, useMap } from 'react-leaflet'; // Import react-leaflet components
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
@@ -203,47 +203,29 @@ const popupVariants: Variants = {
 // Define props for the component if any (currently none needed)
 interface NavigationPageProps {}
 
+// Component to handle map view updates
+const MapViewUpdater = ({ route, sourceCoords, center }: { route: [number, number][]; sourceCoords: [number, number] | null; center: [number, number] }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (route.length > 1) {
+      const bounds = L.latLngBounds(route);
+      if (bounds.isValid()) {
+        map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      }
+    } else if (sourceCoords) {
+      map.flyTo(sourceCoords, 13);
+    } else {
+      map.flyTo(center, 13);
+    }
+  }, [map, route, sourceCoords, center]);
+
+  return null; // This component doesn't render anything
+};
+
 
 // Map component to handle Leaflet initialization and updates using react-leaflet
 const LeafletMapComponent = ({ sourceCoords, destinationCoords, route, segmentRisks, center }: { sourceCoords: [number, number] | null, destinationCoords: [number, number] | null, route: [number, number][], segmentRisks: SegmentRiskData[], center: [number, number] }) => {
-   const mapRef = useRef<LeafletMap | null>(null);
-   const [mapKey, setMapKey] = useState(Date.now()); // Key to force remount if needed
-
-   useEffect(() => {
-     // Function to resize map
-     const resizeMap = () => {
-       if (mapRef.current) {
-         mapRef.current.invalidateSize();
-       }
-     };
-
-     // Invalidate size initially and on window resize
-     const timer = setTimeout(resizeMap, 100);
-     window.addEventListener('resize', resizeMap);
-
-     // Cleanup
-     return () => {
-       clearTimeout(timer);
-       window.removeEventListener('resize', resizeMap);
-     };
-   }, []); // Runs once after initial render
-
-
-   useEffect(() => {
-    // Fit bounds when route changes
-    if (mapRef.current && route.length > 1) {
-      const bounds = L.latLngBounds(route);
-      if (bounds.isValid()) {
-         mapRef.current.flyToBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-      }
-    } else if (mapRef.current && sourceCoords) {
-      // If no route, fly to source coords
-      mapRef.current.flyTo(sourceCoords, 13);
-    } else if (mapRef.current) {
-        // Fallback to center if no source or route
-        mapRef.current.flyTo(center, 13);
-    }
-   }, [route, sourceCoords, center]); // Rerun when route, source, or center changes
 
 
    // If map container ref isn't available yet, don't render map
@@ -254,17 +236,20 @@ const LeafletMapComponent = ({ sourceCoords, destinationCoords, route, segmentRi
 
   return (
         <MapContainer
-            key={mapKey} // Use key to force re-render ONLY IF ABSOLUTELY NEEDED. Avoid if possible.
+            // REMOVED key prop to prevent reinitialization
             center={sourceCoords || center}
             zoom={13}
             style={{ height: '100%', width: '100%' }}
-            whenCreated={(mapInstance) => { mapRef.current = mapInstance; }} // Use whenCreated
             className="z-0" // Ensure map container has a base z-index if needed
+            // REMOVED whenCreated prop, using useMap hook instead for updates
          >
             <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
+
+             {/* Component to handle map view updates */}
+             <MapViewUpdater route={route} sourceCoords={sourceCoords} center={center} />
 
              {/* Source Marker */}
              {sourceCoords && (
