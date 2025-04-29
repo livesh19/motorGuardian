@@ -1,3 +1,4 @@
+
 'use client'; // Ensure this runs on the client
 
 import React from 'react';
@@ -7,7 +8,7 @@ import SpeedRpmChart from '@/components/dashboard/obd/speed-rpm-chart';
 import DiagnosticsCard from '@/components/dashboard/diagnostics-card';
 import TripHistoryTable from '@/components/dashboard/trip-history-table';
 import RiderHealthGauge from '@/components/dashboard/rider-health-gauge';
-import { GaugeCircle, Zap, Droplet, Battery, Fuel, Thermometer } from 'lucide-react'; // Replaced Speedometer with GaugeCircle
+import { GaugeCircle, Zap, Droplet, Battery, Fuel, Thermometer } from 'lucide-react'; // Use GaugeCircle instead of Speedometer
 
 interface ObdDashboardProps {
   rideCondition: 'Urban' | 'Highway' | 'Rainy'; // Receive from AppLayout
@@ -76,8 +77,9 @@ export default function ObdDashboardPage() {
     // The actual rideCondition state will be managed in AppLayout
     return (
         <AppLayout bikeType="obd">
-            {/* Pass props down from AppLayout */}
+             {/* Pass props down from AppLayout */}
            {(props) => <ObdDashboard {...props} />}
         </AppLayout>
     );
 }
+
