@@ -30,7 +30,7 @@ import { Bell, Bike, Gauge, MapPin, BarChart, LogOut, Settings, User, ShieldAler
 import SafetyTipsModal from '@/components/safety-tips-modal'; // Import the modal
 
 interface AppLayoutProps {
-  children: React.ReactNode;
+  children: (props: { rideCondition: 'Urban' | 'Highway' | 'Rainy' }) => React.ReactNode;
   bikeType: 'obd' | 'non-obd';
 }
 
@@ -196,7 +196,7 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
                     transition={{ duration: 0.3 }}
                     className="h-full"
                     >
-                     {React.cloneElement(children as React.ReactElement, { rideCondition })}
+                    {children({ rideCondition })}
                  </motion.div>
                  </AnimatePresence>
             </main>

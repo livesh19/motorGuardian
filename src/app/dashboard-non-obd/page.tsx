@@ -30,7 +30,7 @@ const mockLocation = {
 };
 
 
-const NonObdDashboard: React.FC<NonObdDashboardProps> = ({ rideCondition = 'Urban' }) => {
+const NonObdDashboard: React.FC<NonObdDashboardProps> = ({ rideCondition  }) => {
    const { proximityAlertCount, crashLikelihoodScore, smoothnessScore, nearMissCount, harshBrakingIndex } = mockSensorData;
 
 
@@ -83,10 +83,10 @@ const NonObdDashboard: React.FC<NonObdDashboardProps> = ({ rideCondition = 'Urba
 export default function NonObdDashboardPage() {
      // This outer component ensures AppLayout receives the props correctly
     // The actual rideCondition state will be managed in AppLayout
-    return (
-        <AppLayout bikeType="non-obd">
-             {/* Pass props down from AppLayout */}
-           {(props) => <NonObdDashboard {...props} />}
-        </AppLayout>
+   return (
+    <AppLayout bikeType="non-obd">
+      {({ rideCondition }) => <NonObdDashboard rideCondition={rideCondition} />}
+    </AppLayout>
     );
 }
+
