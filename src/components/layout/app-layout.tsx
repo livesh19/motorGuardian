@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation'; // Import usePathname
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link'; // Import Link
 import {
   SidebarProvider,
   Sidebar,
@@ -87,25 +88,33 @@ export default function AppLayout({ children, bikeType }: AppLayoutProps) {
              <SidebarContent>
                  <SidebarMenu>
                  <SidebarMenuItem>
-                     <SidebarMenuButton
-                        href={bikeType === 'obd' ? "/dashboard-obd" : "/dashboard-non-obd"}
-                        isActive={pathname?.startsWith('/dashboard')} // Use pathname
-                        tooltip="Dashboard"
+                     <Link href={bikeType === 'obd' ? "/dashboard-obd" : "/dashboard-non-obd"} passHref legacyBehavior>
+                        <SidebarMenuButton
+                            asChild // Ensure the button acts as the link's child
+                            isActive={pathname?.startsWith('/dashboard')} // Use pathname
+                            tooltip="Dashboard"
                         >
-                        <Gauge />
-                        <span>Dashboard</span>
-                     </SidebarMenuButton>
+                             <a> {/* Use a simple anchor tag inside; Link handles navigation */}
+                                <Gauge />
+                                <span>Dashboard</span>
+                             </a>
+                        </SidebarMenuButton>
+                     </Link>
                  </SidebarMenuItem>
                  {/* Add Navigation Link */}
                   <SidebarMenuItem>
-                     <SidebarMenuButton
-                        href="/"
-                        isActive={pathname === '/'} // Use pathname
-                        tooltip="Navigation Map"
-                        >
-                        <Navigation />
-                        <span>Navigation</span>
-                     </SidebarMenuButton>
+                     <Link href="/" passHref legacyBehavior>
+                         <SidebarMenuButton
+                            asChild // Ensure the button acts as the link's child
+                            isActive={pathname === '/'} // Use pathname
+                            tooltip="Navigation Map"
+                         >
+                            <a> {/* Use a simple anchor tag inside */}
+                                <Navigation />
+                                <span>Navigation</span>
+                            </a>
+                         </SidebarMenuButton>
+                     </Link>
                  </SidebarMenuItem>
                  <SidebarMenuItem>
                      <SidebarMenuButton onClick={() => setIsModalOpen(true)} tooltip="Safety Tips">
