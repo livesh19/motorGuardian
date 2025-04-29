@@ -1,19 +1,9 @@
-'use client';
+import NavigationPage from '@/components/navigation-page';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-export default function Home() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.push('/login');
-  }, [router]);
-
-  // Optional: Add a loading state or a minimal message
+export default function Home() {  
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <p className="text-foreground">Redirecting to login...</p>
-    </div>
+    <main className="flex flex-col items-center justify-center min-h-screen">
+      <NavigationPage/>
+    </main>
   );
-}
+};
