@@ -4,7 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CloudRain, Sun, Umbrella, Wind, Lightbulb } from 'lucide-react';
+import { CloudRain, Sun, Umbrella, Wind, Lightbulb, AlertTriangle } from 'lucide-react'; // Import AlertTriangle
 import { getWeather, type Weather } from '@/services/weather'; // Import the service
 
 interface WeatherSuggestionsProps {
