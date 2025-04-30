@@ -51,7 +51,7 @@ const TripHistoryTable: React.FC<TripHistoryTableProps> = ({ rideCondition }) =>
         </CardHeader>
         <CardContent>
           <Table>
-            {/* <TableCaption>A list of your recent trips.</TableCaption> */}
+            {}
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[100px]">Trip ID</TableHead>
