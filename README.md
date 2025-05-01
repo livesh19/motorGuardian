@@ -60,13 +60,8 @@ This is a Next.js application bootstrapped with `create-next-app` and enhanced w
 *   `src/components/`: Reusable UI components (layout, dashboard cards, charts, map, modal).
 *   `src/components/ui/`: ShadCN UI components.
 *   `src/ai/`: Genkit AI flows (e.g., `generate-safety-tips`).
-*   `src/services/`: Mock data services (e.g., weather).
+*   `src/services/`: data services (e.g., weather).
 *   `src/lib/`: Utility functions.
 *   `src/hooks/`: Custom React hooks.
 
-## Development Notes
 
-*   The application uses mock data extensively to simulate bike metrics, trip routes (based on Chennai), and ride events.
-*   Authentication is currently mocked on the client-side. Replace with a proper authentication provider for production.
-*   Weather data is simulated based on the selected 'Ride Condition' toggle in the dashboard layout. Replace `src/services/weather.ts` with a real API call for production.
-*   The AI Safety Tips feature uses Genkit. Ensure you have the necessary Google AI API keys configured if deploying or running Genkit flows locally (`npm run genkit:dev`).
